@@ -1,0 +1,15 @@
+{
+  "name": "Parole - Italian vocabulary trainer",
+  "short_name": "Parole",
+  "description": "Italian words library with Russian/Italian training and spaced repetition",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f0e3",
+  "theme_color": "#210101",
+  "icons": [
+    { "src": "icos/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icos/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icos/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
