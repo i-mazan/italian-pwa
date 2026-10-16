@@ -1068,7 +1068,11 @@ async function pushWords() {
   const gone = Object.entries(tombs).filter(([, x]) => !x.sent);
   const rows = [
     ...dirty.map(([w]) => wordToRow(w)),
-    ...gone.map(([id, x]) => ({ id, it: '', ru: '', deleted: true, updated_at: x.t })),
+    // A batch upsert sends missing columns as null, so a delete row has to carry every not-null column.
+    ...gone.map(([id, x]) => ({
+      id, it: '', ru: '', pos: 'other', def_article: '', indef_article: '', example: '',
+      conj: null, srs: {}, created_at: null, updated_at: x.t, deleted: true,
+    })),
   ];
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await sb.from('words').upsert(rows.slice(i, i + 500), { onConflict: 'id' });
