@@ -987,6 +987,39 @@ async function pullWords() {
   return changed;
 }
 
+// The same word created separately on two devices has two ids. Words with the same Italian, article and Russian
+// are merged: the most recently updated copy stays (ties go to the smaller id, so every device picks the same one)
+// and takes the better box for each card; the others are deleted, and the delete syncs to every device.
+const wordKey = w => [w.it, w.defArticle, w.ru].map(s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim()).join('|');
+function dedupeWords() {
+  const groups = new Map();
+  for (const w of words) {
+    if (!w.it || !w.ru) continue;
+    const k = wordKey(w);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(w);
+  }
+  let changed = false;
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0) || (a.id < b.id ? -1 : 1));
+    const [keep, ...rest] = list;
+    keep.srs = keep.srs || {};
+    let merged = false;
+    for (const w of rest) {
+      for (const [card, e] of Object.entries(w.srs || {})) {
+        if (!keep.srs[card] || e.box > keep.srs[card].box) { keep.srs[card] = e; merged = true; }
+      }
+      tombs[w.id] = { t: Date.now(), sent: false };
+    }
+    if (merged) keep.updatedAt = Date.now();
+    words = words.filter(w => !rest.includes(w));
+    changed = true;
+  }
+  if (changed) { persistWords(); persistTombs(); }
+  return changed;
+}
+
 async function pushWords() {
   words.forEach(w => { if (!w.updatedAt) w.updatedAt = Date.now(); });
   const dirty = words.filter(w => w.sv !== w.updatedAt).map(w => [w, w.updatedAt]);
@@ -1058,11 +1091,12 @@ async function syncNow() {
     syncState.uid = uid;
     if (!syncState.deviceId) syncState.deviceId = crypto.randomUUID();
     const a = await pullWords();
+    const d = dedupeWords();
     await pushWords();
     const b = await syncLog();
     syncInfo.at = Date.now();
     syncInfo.error = '';
-    if (a || b) refreshAfterSync();
+    if (a || b || d) refreshAfterSync();
   } catch (err) {
     syncInfo.error = navigator.onLine ? ((err && err.message) || 'unknown error') : 'offline, will retry';
   } finally {
