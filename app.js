@@ -225,10 +225,25 @@ const LIB_GROUPS = [
   ['phrase', 'Phrases', w => w.pos === 'phrase'],
 ];
 
-// [mode, button text, tooltip]; the button cycles through these
-const SORTS = [['az', 'A→Z', 'Sorted A to Z'], ['za', 'Z→A', 'Sorted Z to A'], ['new', '📅↓', 'Newest added first'], ['old', '📅↑', 'Oldest added first']];
+// [mode, button text, calendar icon after the text, tooltip]; the button cycles through these
+const SORTS = [
+  ['az', 'A→Z', false, 'Sorted A to Z'],
+  ['za', 'Z→A', false, 'Sorted Z to A'],
+  ['new', '↓', true, 'Newest added first'],
+  ['old', '↑', true, 'Oldest added first'],
+];
 const sortInfo = () => SORTS.find(x => x[0] === settings.sort) || SORTS[0];
-const sortLabel = () => sortInfo()[1];
+// Same outline style as the tab-bar icons (static markup, no user data).
+const calendarIcon = () => {
+  const t = document.createElement('template');
+  t.innerHTML = '<svg class="cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
+  return t.content.firstChild;
+};
+const drawSort = btn => {
+  const [, text, cal, tip] = sortInfo();
+  btn.replaceChildren(text, ...(cal ? [calendarIcon()] : []));
+  btn.title = tip;
+};
 
 function renderLibrary() {
   const root = $('#view-library');
@@ -238,15 +253,14 @@ function renderLibrary() {
 
   const sortBtn = h('button', {
     class: 'btn secondary sort-btn',
-    title: sortInfo()[2],
     onclick: () => {
       settings.sort = SORTS[(SORTS.indexOf(sortInfo()) + 1) % SORTS.length][0];
       saveSettings();
-      sortBtn.textContent = sortLabel();
-      sortBtn.title = sortInfo()[2];
+      drawSort(sortBtn);
       refresh();
     },
-  }, sortLabel());
+  });
+  drawSort(sortBtn);
 
   // Sorted once per render (words only change through the editor, which re-renders);
   // typing in Search or tapping a chip just filters this list.

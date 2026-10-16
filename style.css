@@ -185,6 +185,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
 .row > * { flex: 1; min-width: 0; }
 .row > .btn, .row > .icon-btn { flex: 0 0 auto; }
 .row > .sort-btn { padding: 11px 12px; font-size: 14px; }
+.sort-btn .cal { width: 17px; height: 17px; vertical-align: -3px; margin-left: 2px; }
 .row > .add-btn { padding: 11px 30px; }
 .row > .btn:only-child { flex: 1; }
 .muted { color: var(--muted); font-size: 14px; }
