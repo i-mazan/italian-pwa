@@ -32,6 +32,6 @@ Settings → Import CSV. Save the file as UTF-8 so Russian letters and accents s
 
 ```
 defArticle;indefArticle;italian;russian;pos;example
-il;un;libro;книга;noun-m;Leggo un libro.
+il;un;libro;книга;noun;Leggo un libro.
 ```
-`pos` is one of `noun-m`, `noun-f`, `verb`, `adj`, `adv`, `other`. Importing a word that already exists updates it and keeps its progress.
+`pos` is one of `noun`, `verb`, `adj`, `adv`, `phrase`, `other`. Importing a word that already exists updates it and keeps its progress.

@@ -3,7 +3,7 @@
 // ---------- constants & storage ----------
 const WORDS_KEY = 'ivp.words.v1';
 const SETTINGS_KEY = 'ivp.settings.v1';
-const POS = ['noun-m', 'noun-f', 'verb', 'adj', 'adv', 'other'];
+const POS = ['noun', 'verb', 'adj', 'adv', 'phrase', 'other'];
 const PRON = ['io', 'tu', 'lui', 'noi', 'voi', 'loro'];
 const PRON_LABEL = { io: 'io', tu: 'tu', lui: 'lui/lei', noi: 'noi', voi: 'voi', loro: 'loro' };
 const DAY = 864e5;
@@ -18,6 +18,9 @@ function loadJSON(key, fallback) {
 let words = loadJSON(WORDS_KEY, []);
 let settings = Object.assign({ strict: false, sortDesc: false }, loadJSON(SETTINGS_KEY, {}));
 const saveWords = () => localStorage.setItem(WORDS_KEY, JSON.stringify(words));
+// Nouns used to be split into noun-m / noun-f; the article already carries the gender, so they are one type now.
+const oldNoun = p => p === 'noun-m' || p === 'noun-f';
+if (words.some(w => oldNoun(w.pos))) { words.forEach(w => { if (oldNoun(w.pos)) w.pos = 'noun'; }); saveWords(); }
 const saveSettings = () => localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 
 // Per-day answer log ({ 'YYYY-MM-DD': { n, ok } }) for streak and today's count.
@@ -173,14 +176,14 @@ window.addEventListener('resize', syncHeaderHeight);
 
 // ---------- library ----------
 const lib = { q: '', pos: '' };
-// Library filter chips: masculine and feminine nouns share one chip.
+// Library filter chips: words without an article ('other') are listed with the nouns.
 const LIB_GROUPS = [
   ['', 'All', () => true],
-  ['noun', 'Nouns', w => w.pos === 'noun-m' || w.pos === 'noun-f'],
+  ['noun', 'Nouns', w => w.pos === 'noun' || w.pos === 'other'],
   ['verb', 'Verbs', w => w.pos === 'verb'],
   ['adj', 'Adjectives', w => w.pos === 'adj'],
   ['adv', 'Adverbs', w => w.pos === 'adv'],
-  ['other', 'Other', w => w.pos === 'other'],
+  ['phrase', 'Phrases', w => w.pos === 'phrase'],
 ];
 
 const sortLabel = () => (settings.sortDesc ? 'Z→A' : 'A→Z');
@@ -265,12 +268,12 @@ function wordRow(w) {
 }
 
 function openEditor(existing) {
-  const w = existing || { pos: 'noun-m' };
+  const w = existing || { pos: 'noun' };
   const conj = conjOf(w);
   const f = {};
   const field = (name, label, attrs = {}) => {
     f[name] = h('input', Object.assign({ value: w[name] ?? '' }, attrs));
-    return [h('label', null, label), f[name]];
+    return [h('label', { id: 'lbl-' + name }, label), f[name]];
   };
 
   f.pos = h('select', { onchange: syncVerb }, POS.map(p => h('option', { value: p, selected: w.pos === p }, p)));
@@ -296,6 +299,9 @@ function openEditor(existing) {
   function syncVerb() {
     conjBox.hidden = f.pos.value !== 'verb';
     dlg.querySelector('#article-fields').hidden = !f.pos.value.startsWith('noun');
+    // "without article" only makes sense for nouns and other (article-less) words
+    const plain = f.pos.value.startsWith('noun') || f.pos.value === 'other';
+    dlg.querySelector('#lbl-it').textContent = plain ? 'Italian (without article)' : 'Italian';
   }
 
   const dlg = h('dialog');
@@ -329,7 +335,7 @@ function openEditor(existing) {
     h('h2', null, existing ? 'Edit word' : 'Add word'),
     h('label', null, 'Type'), f.pos,
     field('it', 'Italian (without article)', { required: true, autocapitalize: 'off' }),
-    field('ru', 'Russian (separate several translations with commas)', { required: true }),
+    field('ru', 'Russian (separate translations with commas)', { required: true }),
     h('div', { id: 'article-fields' },
       field('defArticle', 'Definite article (il, lo, la, l\', i, gli, le)', { list: 'dl-def', autocapitalize: 'off' }),
       field('indefArticle', 'Indefinite article (un, uno, una, un\')', { list: 'dl-indef', autocapitalize: 'off' })),
@@ -367,8 +373,10 @@ const MODES = [
   ['table', 'Verb conjugation: full table'],
 ];
 
+// Phrases can't be typed reliably, so they only appear in flashcards.
 function modeItems(mode, dir) {
-  return itemsFor(mode === 'flash' || mode === 'type' ? 'words' : mode, dir);
+  const items = itemsFor(mode === 'flash' || mode === 'type' ? 'words' : mode, dir);
+  return mode === 'type' ? items.filter(i => i.w.pos !== 'phrase') : items;
 }
 
 function renderTrain() {
@@ -397,7 +405,8 @@ function startSession() {
   if (!queue.length) {
     const needsVerbs = trainPrefs.mode === 'conj' || trainPrefs.mode === 'table';
     return alert(words.length
-      ? needsVerbs ? 'No verbs with conjugation forms yet. Add a verb and fill in its forms.' : 'Nothing to practise yet.'
+      ? needsVerbs ? 'No verbs with conjugation forms yet. Add a verb and fill in its forms.'
+        : trainPrefs.mode === 'type' ? 'No words to type yet. Phrases are practised with flashcards.' : 'Nothing to practise yet.'
       : 'Add some words first.');
   }
   session = { mode: trainPrefs.mode, queue, idx: 0, correct: 0, total: 0 };
@@ -461,7 +470,6 @@ function answer(item) {
   const w = item.w;
   return item.k === 'ru-it' ? itForms(w).join('  /  ') : w.ru;
 }
-// Flashcards show the type without noun gender (noun-m / noun-f -> noun), which would hint at the article.
 const typeLabel = w => (w.pos.startsWith('noun') ? 'noun' : w.pos);
 
 function extras(w) {
@@ -638,6 +646,7 @@ function importCSV(text) {
     const forms = {};
     PRON.forEach(p => { const v = get(r, p); if (v) forms[p] = v; });
     let pos = get(r, 'pos').toLowerCase();
+    if (oldNoun(pos)) pos = 'noun'; // older files use noun-m / noun-f
     if (!POS.includes(pos)) pos = Object.keys(forms).length ? 'verb' : 'other';
     const data = {
       it, ru, pos,
