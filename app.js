@@ -72,6 +72,9 @@ function streak() {
 // ---------- small helpers ----------
 const $ = sel => document.querySelector(sel);
 
+// Two words are the same word when Italian, definite article and Russian match (ignoring case and extra spaces).
+const wordKey = w => [w.it, w.defArticle, w.ru].map(s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim()).join('|');
+
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -704,7 +707,8 @@ function importCSV(text) {
   if (col.italian < 0 || col.russian < 0) return alert('The header row must contain "italian" and "russian" columns.');
   const get = (r, n) => (col[n] >= 0 ? (r[col[n]] || '').trim() : '');
 
-  let added = 0, updated = 0, skipped = 0;
+  let added = 0, existing = 0, skipped = 0;
+  const known = new Set(words.map(wordKey));
   for (const r of rows.slice(1)) {
     const it = get(r, 'italian'), ru = get(r, 'russian');
     if (!it || !ru) { skipped++; continue; }
@@ -721,12 +725,13 @@ function importCSV(text) {
       conj: Object.keys(forms).length ? { presente: forms } : undefined,
       updatedAt: Date.now(),
     };
-    const dup = words.find(w => w.it.toLowerCase() === it.toLowerCase() && (w.defArticle || '') === data.defArticle);
-    if (dup) { Object.assign(dup, data); updated++; }
-    else { words.push({ id: crypto.randomUUID(), srs: {}, createdAt: Date.now(), ...data }); added++; }
+    if (known.has(wordKey(data))) { existing++; continue; } // already in the library (or repeated in the file): leave it alone
+    known.add(wordKey(data));
+    words.push({ id: crypto.randomUUID(), srs: {}, createdAt: Date.now(), ...data });
+    added++;
   }
   saveWords();
-  alert(`Import finished: ${added} added, ${updated} updated, ${skipped} skipped.`);
+  alert(`Import finished: ${added} added, ${existing} already in your library, ${skipped} skipped (no Italian or Russian).`);
 }
 
 function exportCSV() {
@@ -1026,7 +1031,6 @@ async function pullWords() {
 // The same word created separately on two devices has two ids. Words with the same Italian, article and Russian
 // are merged: the most recently updated copy stays (ties go to the smaller id, so every device picks the same one)
 // and takes the better box for each card; the others are deleted, and the delete syncs to every device.
-const wordKey = w => [w.it, w.defArticle, w.ru].map(s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim()).join('|');
 function dedupeWords() {
   const groups = new Map();
   for (const w of words) {
