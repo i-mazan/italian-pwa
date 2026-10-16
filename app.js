@@ -835,7 +835,7 @@ function renderLogin() {
   root.append(
     h('h2', null, 'Sign in'),
     h('p', { class: 'muted' }, 'Sign in to sync your words across devices.'),
-    sb ? null : h('p', { class: 'fb bad' }, 'The app is not connected to Supabase yet. Fill in config.js.'),
+    ...(sb ? [] : [h('p', { class: 'fb bad' }, 'The app is not connected to Supabase yet. Fill in config.js.')]),
     h('form', {
       class: 'login',
       onsubmit: async e => {
