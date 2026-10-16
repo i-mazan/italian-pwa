@@ -14,6 +14,7 @@ create table public.words (
   example text not null default '',
   conj jsonb,
   srs jsonb not null default '{}',
+  created_at bigint,                     -- when the word was added (ms); used for "sort by date added"
   updated_at bigint not null,            -- the app's updatedAt (ms); the newer one wins when merging
   deleted boolean not null default false, -- tombstone, so a synced device doesn't bring deleted words back
   synced_at timestamptz not null default now() -- set by the server on every write; devices pull by this

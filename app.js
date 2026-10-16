@@ -16,7 +16,8 @@ function loadJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
 let words = loadJSON(WORDS_KEY, []);
-let settings = Object.assign({ strict: false, sortDesc: false }, loadJSON(SETTINGS_KEY, {}));
+let settings = Object.assign({ strict: false }, loadJSON(SETTINGS_KEY, {}));
+if (!settings.sort) settings.sort = settings.sortDesc ? 'za' : 'az'; // az, za, new (newest first) or old (oldest first)
 const hooks = { changed() {} }; // replaced by the sync code; called after every save
 const saveWords = () => { localStorage.setItem(WORDS_KEY, JSON.stringify(words)); hooks.changed(); };
 // Words deleted on this device, kept until the server has been told: { id: { t, sent } }
@@ -31,6 +32,14 @@ function deleteWord(w) {
 // Nouns used to be split into noun-m / noun-f; the article already carries the gender, so they are one type now.
 const oldNoun = p => p === 'noun-m' || p === 'noun-f';
 if (words.some(w => oldNoun(w.pos))) { words.forEach(w => { if (oldNoun(w.pos)) w.pos = 'noun'; }); saveWords(); }
+// Words added before createdAt existed get stand-in dates that keep their library order (oldest first).
+function backfillCreated() {
+  if (words.every(w => w.createdAt)) return false;
+  const base = Date.now() - words.length;
+  words.forEach((w, i) => { if (!w.createdAt) { w.createdAt = base + i; w.sv = null; } });
+  return true;
+}
+if (backfillCreated()) saveWords();
 const saveSettings = () => localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 
 // Per-day answer log ({ 'YYYY-MM-DD': { n, ok } }) for streak and today's count.
@@ -216,7 +225,10 @@ const LIB_GROUPS = [
   ['phrase', 'Phrases', w => w.pos === 'phrase'],
 ];
 
-const sortLabel = () => (settings.sortDesc ? 'Z→A' : 'A→Z');
+// [mode, button text, tooltip]; the button cycles through these
+const SORTS = [['az', 'A→Z', 'Sorted A to Z'], ['za', 'Z→A', 'Sorted Z to A'], ['new', '📅↓', 'Newest added first'], ['old', '📅↑', 'Oldest added first']];
+const sortInfo = () => SORTS.find(x => x[0] === settings.sort) || SORTS[0];
+const sortLabel = () => sortInfo()[1];
 
 function renderLibrary() {
   const root = $('#view-library');
@@ -226,8 +238,14 @@ function renderLibrary() {
 
   const sortBtn = h('button', {
     class: 'btn secondary sort-btn',
-    title: 'Sort Italian words',
-    onclick: () => { settings.sortDesc = !settings.sortDesc; saveSettings(); sortBtn.textContent = sortLabel(); refresh(); },
+    title: sortInfo()[2],
+    onclick: () => {
+      settings.sort = SORTS[(SORTS.indexOf(sortInfo()) + 1) % SORTS.length][0];
+      saveSettings();
+      sortBtn.textContent = sortLabel();
+      sortBtn.title = sortInfo()[2];
+      refresh();
+    },
   }, sortLabel());
 
   // Sorted once per render (words only change through the editor, which re-renders);
@@ -247,7 +265,11 @@ function renderLibrary() {
     const q = lib.q.toLowerCase();
     const test = LIB_GROUPS.find(g => g[0] === lib.pos)[2];
     const shown = sorted.filter(s => test(s.w) && (!q || s.hay.includes(q))).map(s => s.w);
-    if (settings.sortDesc) shown.reverse();
+    if (settings.sort === 'za') shown.reverse();
+    else if (settings.sort === 'new' || settings.sort === 'old') {
+      shown.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)); // stable, so ties stay alphabetical
+      if (settings.sort === 'new') shown.reverse();
+    }
     list.replaceChildren(
       ...(shown.length ? shown.map(wordRow) : [h('p', { class: 'muted' }, words.length ? 'No matches.' : 'No words yet. Add one or import a CSV in Settings.')])
     );
@@ -354,7 +376,7 @@ function openEditor(existing) {
       if (data.pos === 'verb') PRON.forEach(p => { const v = conjInputs[p].value.trim(); if (v) forms[p] = v; });
       data.conj = Object.keys(forms).length ? { presente: forms } : undefined;
       if (existing) Object.assign(existing, data);
-      else words.push({ id: crypto.randomUUID(), srs: {}, ...data });
+      else words.push({ id: crypto.randomUUID(), srs: {}, createdAt: Date.now(), ...data });
       (existing || words[words.length - 1]).updatedAt = Date.now();
       saveWords();
       dlg.close();
@@ -687,7 +709,7 @@ function importCSV(text) {
     };
     const dup = words.find(w => w.it.toLowerCase() === it.toLowerCase() && (w.defArticle || '') === data.defArticle);
     if (dup) { Object.assign(dup, data); updated++; }
-    else { words.push({ id: crypto.randomUUID(), srs: {}, ...data }); added++; }
+    else { words.push({ id: crypto.randomUUID(), srs: {}, createdAt: Date.now(), ...data }); added++; }
   }
   saveWords();
   alert(`Import finished: ${added} added, ${updated} updated, ${skipped} skipped.`);
@@ -936,12 +958,12 @@ const persistTombs = () => localStorage.setItem(TOMB_KEY, JSON.stringify(tombs))
 const rowToWord = r => ({
   id: r.id, it: r.it, ru: r.ru, pos: r.pos,
   defArticle: r.def_article, indefArticle: r.indef_article, example: r.example,
-  conj: r.conj || undefined, srs: r.srs || {}, updatedAt: r.updated_at, sv: r.updated_at,
+  conj: r.conj || undefined, srs: r.srs || {}, createdAt: r.created_at || undefined, updatedAt: r.updated_at, sv: r.updated_at,
 });
 const wordToRow = w => ({
   id: w.id, it: w.it, ru: w.ru, pos: w.pos,
   def_article: w.defArticle || '', indef_article: w.indefArticle || '', example: w.example || '',
-  conj: w.conj || null, srs: w.srs || {}, updated_at: w.updatedAt, deleted: false,
+  conj: w.conj || null, srs: w.srs || {}, created_at: w.createdAt || null, updated_at: w.updatedAt, deleted: false,
 });
 
 // Returns true when the local library changed.
@@ -1013,6 +1035,8 @@ function dedupeWords() {
       tombs[w.id] = { t: Date.now(), sent: false };
     }
     if (merged) keep.updatedAt = Date.now();
+    const first = Math.min(...list.map(w => w.createdAt || Infinity));
+    if (first !== Infinity && first !== keep.createdAt) { keep.createdAt = first; keep.sv = null; }
     words = words.filter(w => !rest.includes(w));
     changed = true;
   }
@@ -1091,6 +1115,7 @@ async function syncNow() {
     syncState.uid = uid;
     if (!syncState.deviceId) syncState.deviceId = crypto.randomUUID();
     const a = await pullWords();
+    if (backfillCreated()) persistWords();
     const d = dedupeWords();
     await pushWords();
     const b = await syncLog();
