@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Parole</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#210101">
+  <link rel="icon" href="icos/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icos/icon-180.png">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Set the theme before the page paints, so there is no light flash in dark mode.
+    (function () {
+      var t;
+      try { t = JSON.parse(localStorage.getItem('ivp.settings.v1')).theme; } catch (e) {}
+      if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+</head>
+<body>
+  <header>
+    <h1>Parole<span>italiano · русский</span></h1>
+  </header>
+
+  <main>
+    <section id="view-login" hidden></section>
+    <section id="view-library"></section>
+    <section id="view-train" hidden></section>
+    <section id="view-settings" hidden></section>
+  </main>
+
+  <nav>
+    <button data-view="library" class="active">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v14H6a2 2 0 0 0-2 2zm0 0a2 2 0 0 0 2 2h13"/><path d="M9 7h6"/></svg>Library
+    </button>
+    <button data-view="train">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>Practice
+    </button>
+    <button data-view="settings">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>Settings
+    </button>
+  </nav>
+
+  <datalist id="dl-def">
+    <option value="il"><option value="lo"><option value="la"><option value="l'">
+    <option value="i"><option value="gli"><option value="le">
+  </datalist>
+  <datalist id="dl-indef">
+    <option value="un"><option value="uno"><option value="una"><option value="un'">
+  </datalist>
+
+  <script src="vendor/supabase.js" defer></script>
+  <script src="config.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
