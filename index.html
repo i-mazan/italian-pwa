@@ -7,8 +7,17 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#210101">
   <link rel="icon" href="icos/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icos/icon-192.png">
+  <link rel="apple-touch-icon" href="icos/icon-180.png">
   <link rel="stylesheet" href="style.css">
+  <script>
+    // Set the theme before the page paints, so there is no light flash in dark mode.
+    (function () {
+      var t;
+      try { t = JSON.parse(localStorage.getItem('ivp.settings.v1')).theme; } catch (e) {}
+      if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
 </head>
 <body>
   <header>

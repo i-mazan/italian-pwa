@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'parole-v41';
+const CACHE = 'parole-v50';
 const ASSETS = [
   './',
   'index.html',
@@ -9,10 +9,12 @@ const ASSETS = [
   'manifest.webmanifest',
   'icos/icon.svg',
   'icos/library.svg',
-  'icos/train.svg',
+  'icos/practice.svg',
   'icos/settings.svg',
   'icos/icon-192.png',
   'icos/icon-512.png',
+  'icos/icon-1024.png',
+  'icos/icon-180.png',
 ];
 
 self.addEventListener('install', e => {

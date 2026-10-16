@@ -150,6 +150,12 @@ function buildQueue(items) {
   return shuffle(items).sort((a, b) => box(a) - box(b)).slice(0, SESSION_MAX).map(i => ({ ...i, extra: true }));
 }
 
+// ---------- theme ----------
+// Follows the device until the user picks Light or Dark in Settings.
+const currentTheme = () => settings.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+const applyTheme = () => { document.documentElement.dataset.theme = currentTheme(); };
+applyTheme();
+
 // ---------- navigation ----------
 const views = { library: renderLibrary, train: renderTrain, settings: renderSettings };
 
@@ -727,6 +733,12 @@ function renderSettings() {
         onchange: e => { settings.strict = e.target.checked; saveSettings(); },
       }),
       h('span', null, 'Strict accents (è ≠ e) when typing Italian')),
+    h('h3', null, 'Theme'),
+    h('div', { class: 'row' }, ...['light', 'dark'].map(t =>
+      h('button', {
+        class: 'btn ' + (currentTheme() === t ? '' : 'secondary'),
+        onclick: () => { settings.theme = t; saveSettings(); applyTheme(); renderSettings(); },
+      }, t === 'light' ? 'Light' : 'Dark'))),
     h('h3', null, 'CSV'),
     h('p', { class: 'muted' }, 'Columns: ' + CSV_COLUMNS.join('; ') + '. Only italian and russian are required.'),
     h('div', { class: 'row' },

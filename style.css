@@ -15,22 +15,20 @@
   --serif: Georgia, "Palatino Linotype", "Book Antiqua", Palatino, serif;
   --radius: 16px;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1d1814;
-    --card: #2a231d;
-    --text: #f1e7d8;
-    --muted: #a39482;
-    --accent: #d86a6a;
-    --accent-soft: #3a2020;
-    --accent-text: #2a0a0a;
-    --olive: #a3b369;
-    --ok: #8fb866;
-    --bad: #ee7a68;
-    --border: #3d332a;
-    --shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-    --thumb: #8a4a4a;
-  }
+:root[data-theme="dark"] {
+  --bg: #140606;
+  --card: #200d0d;
+  --text: #f1e7d8;
+  --muted: #a8928f;
+  --accent: #d86a6a;
+  --accent-soft: #3a2020;
+  --accent-text: #2a0a0a;
+  --olive: #6f8550;
+  --ok: #8fb866;
+  --bad: #ee7a68;
+  --border: #3a1b1b;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  --thumb: #8a4a4a;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -133,9 +131,7 @@ nav button .ico {
   transition: transform 0.15s;
 }
 nav button.active { background: rgba(33, 1, 1, 0.07); color: #210101; }
-@media (prefers-color-scheme: dark) {
-  nav button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); }
-}
+:root[data-theme="dark"] nav button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); }
 nav button.active .ico { transform: translateY(-1px); }
 
 /* form controls */
@@ -391,7 +387,5 @@ dialog form { position: relative; }
 .row.center > .btn { flex: 0 0 auto; min-width: 150px; }
 .btn.know { background: #210101; color: #ffffff; }
 .btn.dunno { background: transparent; color: #210101; border: 2px solid #210101; box-shadow: none; }
-@media (prefers-color-scheme: dark) {
-  .btn:not(.secondary):not(.danger):not(.dunno), .chip.active { box-shadow: 0 0 0 1px #6b3a3a; border-color: #6b3a3a; }
-  .btn.dunno { color: var(--text); border-color: #6b3a3a; }
-}
+:root[data-theme="dark"] .btn:not(.secondary):not(.danger):not(.dunno), :root[data-theme="dark"] .chip.active { box-shadow: 0 0 0 1px #6b3a3a; border-color: #6b3a3a; }
+:root[data-theme="dark"] .btn.dunno { color: var(--text); border-color: #6b3a3a; }
