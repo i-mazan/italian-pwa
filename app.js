@@ -1085,7 +1085,7 @@ async function pushWords() {
 
 // A deleted word stays on the server as an empty "deleted" row until every device has had time to hear about it,
 // then it is removed for good. A device that stays offline longer than this keeps its copy of the word.
-const TOMB_KEEP_DAYS = 7;
+const TOMB_KEEP_DAYS = 3;
 async function purgeTombstones() {
   if (Date.now() - (syncState.lastPurge || 0) < 36e5) return; // at most once an hour
   const cutoff = Date.now() - TOMB_KEEP_DAYS * DAY;
