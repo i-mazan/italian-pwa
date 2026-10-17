@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'parole-v79';
+const CACHE = 'parole-v80';
 const ASSETS = [
   './',
   'index.html',

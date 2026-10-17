@@ -329,7 +329,7 @@ function wordRow(w) {
           row.replaceWith(wordRow(w));
         },
       }, open ? '▾' : '▸') : null),
-    speakBtn(itForms(w)[0]),
+    speakBtn(w.it),
     h('button', { class: 'icon-btn', title: 'Edit', onclick: () => openEditor(w) }, '✏️'),
     open ? h('div', { class: 'conj-list' },
       ...PRON.filter(p => conjOf(w)[p]).flatMap(p => [h('span', { class: 'hl' }, p), h('span', null, conjOf(w)[p])])) : null);
@@ -548,10 +548,10 @@ function flashCard(root, item, next) {
   const w = item.w;
   const inner = h('div', { class: 'flip-inner' },
     h('div', { class: 'face front' },
-      h('div', { class: 'big' }, item.k === 'ru-it' ? w.ru : itShown(w), item.k === 'it-ru' ? speakBtn(itForms(w)[0]) : null),
+      h('div', { class: 'big' }, item.k === 'ru-it' ? w.ru : itShown(w), item.k === 'it-ru' ? speakBtn(w.it) : null),
       h('div', { class: 'sub' }, typeLabel(w))),
     h('div', { class: 'face back' },
-      h('div', { class: 'big' }, item.k === 'ru-it' ? itShown(w) : w.ru, item.k === 'ru-it' ? speakBtn(itForms(w)[0]) : null),
+      h('div', { class: 'big' }, item.k === 'ru-it' ? itShown(w) : w.ru, item.k === 'ru-it' ? speakBtn(w.it) : null),
       extras(w)));
   const flip = h('div', { class: 'flip' }, inner);
   const grading = h('div', { class: 'row center', hidden: true },
@@ -564,7 +564,7 @@ function flashCard(root, item, next) {
         inner.classList.add('flipped');
         e.target.parentElement.hidden = true;
         grading.hidden = false;
-        if (item.k === 'ru-it') speak(itForms(w)[0]);
+        if (item.k === 'ru-it') speak(w.it);
       },
     }, 'Show answer'));
   root.append(flip, reveal, grading);
@@ -601,7 +601,7 @@ function typeCard(root, item, next) {
   const input = answerInput(item.k === 'ru-it' ? 'Italian' : 'Russian');
   const fb = h('div', { class: 'fb' });
   formCard(root, next, [
-    h('div', { class: 'big' }, prompt(item), item.k === 'it-ru' ? speakBtn(itForms(w)[0]) : null),
+    h('div', { class: 'big' }, prompt(item), item.k === 'it-ru' ? speakBtn(w.it) : null),
     input, fb,
   ], () => {
     const text = input.value;
@@ -610,7 +610,7 @@ function typeCard(root, item, next) {
       : ruList(w).concat(w.ru).some(x => normRu(x) === normRu(text));
     input.disabled = true;
     showFeedback(fb, ok, answer(item));
-    if (item.k === 'ru-it') speak(itForms(w)[0]);
+    if (item.k === 'ru-it') speak(w.it);
     finish(item, { [item.k]: ok });
   }, input);
 }
