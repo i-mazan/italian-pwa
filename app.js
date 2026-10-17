@@ -709,6 +709,8 @@ function importCSV(text) {
 
   let added = 0, existing = 0, skipped = 0;
   const known = new Set(words.map(wordKey));
+  // Each imported word gets a date one millisecond after the previous one, so the date sort keeps the file's order.
+  let stamp = Math.max(words.reduce((m, w) => Math.max(m, w.createdAt || 0), 0) + 1, Date.now());
   for (const r of rows.slice(1)) {
     const it = get(r, 'italian'), ru = get(r, 'russian');
     if (!it || !ru) { skipped++; continue; }
@@ -727,7 +729,7 @@ function importCSV(text) {
     };
     if (known.has(wordKey(data))) { existing++; continue; } // already in the library (or repeated in the file): leave it alone
     known.add(wordKey(data));
-    words.push({ id: crypto.randomUUID(), srs: {}, createdAt: Date.now(), ...data });
+    words.push({ id: crypto.randomUUID(), srs: {}, createdAt: stamp++, ...data });
     added++;
   }
   saveWords();
