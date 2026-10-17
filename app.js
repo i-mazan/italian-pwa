@@ -1083,6 +1083,19 @@ async function pushWords() {
   if (rows.length) { persistWords(); persistTombs(); }
 }
 
+// A deleted word stays on the server as an empty "deleted" row until every device has had time to hear about it,
+// then it is removed for good. A device that stays offline longer than this keeps its copy of the word.
+const TOMB_KEEP_DAYS = 7;
+async function purgeTombstones() {
+  if (Date.now() - (syncState.lastPurge || 0) < 36e5) return; // at most once an hour
+  const cutoff = Date.now() - TOMB_KEEP_DAYS * DAY;
+  const { error } = await sb.from('words').delete().eq('deleted', true).lt('updated_at', cutoff);
+  if (error) throw error;
+  syncState.lastPurge = Date.now();
+  const old = Object.entries(tombs).filter(([, x]) => x.sent && x.t < cutoff);
+  if (old.length) { old.forEach(([id]) => { delete tombs[id]; }); persistTombs(); }
+}
+
 // Each device pushes its own per-day counts; the other devices' counts are summed into logOthers.
 async function syncLog() {
   const pushed = syncState.logPushed || (syncState.logPushed = {});
@@ -1140,6 +1153,7 @@ async function syncNow() {
     if (backfillCreated()) persistWords();
     const d = dedupeWords();
     await pushWords();
+    await purgeTombstones();
     const b = await syncLog();
     syncInfo.at = Date.now();
     syncInfo.error = '';
