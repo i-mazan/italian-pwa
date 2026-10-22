@@ -9,6 +9,7 @@
   --flip-border: #e0d3b8;
   --accent-text: #ffffff;
   --olive: #6b7a3a;
+  --familiar: #3f8f93;
   --ok: #5d7f3a;
   --bad: #b3402e;
   --border: #eee5d4;
@@ -28,6 +29,7 @@
   --flip-border: #4d3b42;
   --accent-text: #2a0a0a;
   --olive: #6f8550;
+  --familiar: #5fb3b3;
   --ok: #8fb866;
   --bad: #ee7a68;
   --border: #3a1b1b;
@@ -383,7 +385,7 @@ dialog form { position: relative; }
 .tile .num { font: 700 28px/1.1 var(--serif); color: var(--accent); }
 .bar { display: flex; height: 14px; overflow: hidden; border-radius: 7px; background: var(--border); }
 .seg.learning, .dot.learning { background: #d9a441; }
-.seg.familiar, .dot.familiar { background: var(--olive); }
+.seg.familiar, .dot.familiar { background: var(--familiar); }
 .seg.mastered, .dot.mastered { background: var(--ok); }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 14px; font-size: 14px; color: var(--muted); }
 .dot { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; background: var(--border); }
