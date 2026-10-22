@@ -334,8 +334,6 @@ label.muted { display: block; margin-top: 12px; }
 .conj-grid .mark.ok { color: var(--ok); }
 .conj-grid .mark.bad { color: var(--bad); }
 .conj-grid .fix { grid-column: 2 / 4; color: var(--ok); font-size: 14px; margin-top: -4px; padding-left: 13.5px; /* input border + padding, so it lines up with the typed text */ }
-.conj-show { display: grid; grid-template-columns: auto auto; gap: 2px 18px; margin: 14px auto 0; width: fit-content; text-align: left; }
-.conj-show .hl { color: var(--accent); font-weight: 700; }
 
 /* dialog */
 dialog {

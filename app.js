@@ -100,7 +100,8 @@ function shuffle(a) {
 
 function speak(text) {
   if (!('speechSynthesis' in window) || !text) return;
-  const u = new SpeechSynthesisUtterance(text);
+  // A lone "è" is read out as "e con accento grave"; say it as plain "e".
+  const u = new SpeechSynthesisUtterance(/^\s*è\s*$/i.test(text) ? 'e' : text);
   u.lang = 'it-IT';
   speechSynthesis.cancel();
   speechSynthesis.speak(u);
@@ -629,28 +630,20 @@ function typeCard(root, item, next) {
   }, input);
 }
 
-function conjShow(w, hlPron) {
-  const c = conjOf(w);
-  return h('div', { class: 'conj-show' },
-    PRON.flatMap(p => c[p] ? [h('span', { class: p === hlPron ? 'hl' : '' }, PRON_LABEL[p]), h('span', { class: p === hlPron ? 'hl' : '' }, c[p])] : []));
-}
-
 function conjCard(root, item, next) {
   const w = item.w;
   const input = answerInput('Form');
   const fb = h('div', { class: 'fb' });
-  const detail = h('div');
   formCard(root, next, [
     h('div', { class: 'big' }, w.it),
     h('div', { class: 'sub' }, w.ru),
     h('div', { class: 'pron' }, PRON_LABEL[item.p]),
-    input, fb, detail,
+    input, fb,
   ], () => {
     const expected = conjOf(w)[item.p];
     const ok = normIt(input.value) === normIt(expected);
     input.disabled = true;
     showFeedback(fb, ok, expected);
-    detail.append(conjShow(w, item.p));
     speak(expected);
     finish(item, { [item.k]: ok });
   }, input);
