@@ -10,6 +10,8 @@ const DAY = 864e5;
 const INTERVALS = [1, 2, 4, 8, 16]; // days per Leitner box 1..5
 const NEW_PER_SESSION = 5;
 const SESSION_MAX = 20;
+const TYPE_SESSION = 10;
+const TYPE_NEW_RESERVED = 3;
 const CSV_COLUMNS = ['defArticle', 'indefArticle', 'italian', 'russian', 'pos', 'example', ...PRON];
 
 function loadJSON(key, fallback) {
@@ -180,14 +182,26 @@ function itemsFor(mode, dir) {
   return words.flatMap(w => dirs.map(k => ({ w, k })));
 }
 
-function buildQueue(items) {
+function buildQueue(items, mode) {
   const due = shuffle(items.filter(i => status(i) === 'due'));
-  const fresh = shuffle(items.filter(i => status(i) === 'new')).slice(0, NEW_PER_SESSION);
-  const queue = due.concat(fresh).slice(0, SESSION_MAX);
+  const newAll = shuffle(items.filter(i => status(i) === 'new'));
+  let max = SESSION_MAX;
+  let queue;
+  if (mode === 'type') {
+    // Type the answer: sessions of 10. Up to TYPE_NEW_RESERVED slots are kept for new words so a
+    // backlog of due words can't push them out; leftover slots go to whichever group has more.
+    max = TYPE_SESSION;
+    const reserved = newAll.slice(0, TYPE_NEW_RESERVED);
+    const dueTaken = due.slice(0, max - reserved.length);
+    const extraNew = newAll.slice(reserved.length, reserved.length + max - reserved.length - dueTaken.length);
+    queue = shuffle(dueTaken.concat(reserved, extraNew));
+  } else {
+    queue = due.concat(newAll.slice(0, NEW_PER_SESSION)).slice(0, max);
+  }
   if (queue.length || !items.length) return queue;
   // Nothing due or new: extra practice, weakest cards (lowest box) first.
   const box = i => Math.min(...keysOf(i).map(k => srsGet(i.w, k)?.box ?? 1));
-  return shuffle(items).sort((a, b) => box(a) - box(b)).slice(0, SESSION_MAX).map(i => ({ ...i, extra: true }));
+  return shuffle(items).sort((a, b) => box(a) - box(b)).slice(0, max).map(i => ({ ...i, extra: true }));
 }
 
 // ---------- theme ----------
@@ -469,7 +483,7 @@ function renderTrain() {
 }
 
 function startSession() {
-  const queue = buildQueue(modeItems(trainPrefs.mode, trainPrefs.dir));
+  const queue = buildQueue(modeItems(trainPrefs.mode, trainPrefs.dir), trainPrefs.mode);
   if (!queue.length) {
     const needsVerbs = trainPrefs.mode === 'conj' || trainPrefs.mode === 'table';
     return alert(words.length
