@@ -8,10 +8,8 @@ const PRON = ['io', 'tu', 'lui', 'noi', 'voi', 'loro'];
 const PRON_LABEL = { io: 'io', tu: 'tu', lui: 'lui/lei', noi: 'noi', voi: 'voi', loro: 'loro' };
 const DAY = 864e5;
 const INTERVALS = [1, 2, 4, 8, 16]; // days per Leitner box 1..5
-const NEW_PER_SESSION = 5;
-const SESSION_MAX = 20;
-const TYPE_SESSION = 10;
-const TYPE_NEW_RESERVED = 3;
+const SESSION_SIZE = 10;
+const NEW_RESERVED = 3;
 const CSV_COLUMNS = ['defArticle', 'indefArticle', 'italian', 'russian', 'pos', 'example', ...PRON];
 
 function loadJSON(key, fallback) {
@@ -186,19 +184,13 @@ function itemsFor(mode, dir) {
 function buildQueue(items, mode) {
   const due = shuffle(items.filter(i => status(i) === 'due'));
   const newAll = shuffle(items.filter(i => status(i) === 'new'));
-  let max = SESSION_MAX;
-  let queue;
-  if (mode === 'type') {
-    // Type the answer: sessions of 10. Up to TYPE_NEW_RESERVED slots are kept for new words so a
-    // backlog of due words can't push them out; leftover slots go to whichever group has more.
-    max = TYPE_SESSION;
-    const reserved = newAll.slice(0, TYPE_NEW_RESERVED);
-    const dueTaken = due.slice(0, max - reserved.length);
-    const extraNew = newAll.slice(reserved.length, reserved.length + max - reserved.length - dueTaken.length);
-    queue = shuffle(dueTaken.concat(reserved, extraNew));
-  } else {
-    queue = due.concat(newAll.slice(0, NEW_PER_SESSION)).slice(0, max);
-  }
+  const max = SESSION_SIZE;
+  // Same size in every mode and direction. Up to NEW_RESERVED slots are kept for new words so a
+  // backlog of due words can't push them out; leftover slots go to whichever group has more.
+  const reserved = newAll.slice(0, NEW_RESERVED);
+  const dueTaken = due.slice(0, max - reserved.length);
+  const extraNew = newAll.slice(reserved.length, reserved.length + max - reserved.length - dueTaken.length);
+  const queue = shuffle(dueTaken.concat(reserved, extraNew));
   if (queue.length || !items.length) return queue;
   // Nothing due or new: extra practice, weakest cards (lowest box) first.
   const box = i => Math.min(...keysOf(i).map(k => srsGet(i.w, k)?.box ?? 1));
@@ -347,7 +339,7 @@ function wordRow(w) {
     speakBtn(w.it),
     h('button', { class: 'icon-btn', title: 'Edit', onclick: () => openEditor(w) }, '✏️'),
     open ? h('div', { class: 'conj-list' },
-      ...PRON.filter(p => conjOf(w)[p]).flatMap(p => [h('span', { class: 'hl' }, p), h('span', null, conjOf(w)[p])])) : null);
+      ...PRON.filter(p => conjOf(w)[p]).flatMap(p => [h('span', { class: 'hl' }, PRON_LABEL[p]), h('span', null, conjOf(w)[p])])) : null);
   return row;
 }
 
@@ -383,6 +375,7 @@ function openEditor(existing) {
   function syncVerb() {
     conjBox.hidden = f.pos.value !== 'verb';
     dlg.querySelector('#article-fields').hidden = !f.pos.value.startsWith('noun');
+    dlg.querySelector('#example-fields').hidden = f.pos.value === 'phrase';
     // "without article" only makes sense for nouns and other (article-less) words
     const plain = f.pos.value.startsWith('noun') || f.pos.value === 'other';
     dlg.querySelector('#lbl-it').textContent = plain ? 'Italian (without article)' : 'Italian';
@@ -423,7 +416,7 @@ function openEditor(existing) {
     h('div', { id: 'article-fields' },
       field('defArticle', 'Definite article (il, lo, la, l\', i, gli, le)', { list: 'dl-def', autocapitalize: 'off' }),
       field('indefArticle', 'Indefinite article (un, uno, una, un\')', { list: 'dl-indef', autocapitalize: 'off' })),
-    field('example', 'Example sentence'),
+    h('div', { id: 'example-fields' }, field('example', 'Example sentence')),
     conjBox,
     h('div', { class: 'row' },
       existing ? h('button', {
