@@ -112,6 +112,8 @@ const itForms = w => {
   const f = [w.defArticle, w.indefArticle].filter(Boolean).map(a => withArticle(a, w.it));
   return f.length ? f : [w.it];
 };
+// The voice says the word with its definite article ('il museo'); the indefinite one only when there is no definite.
+const itSpoken = w => itForms(w)[0];
 // Flashcards show both articles together: 'il / un museo' (or "l'amico / un amico" when the article elides).
 function itShown(w) {
   if (!w.defArticle || !w.indefArticle) return itForms(w)[0];
@@ -336,7 +338,7 @@ function wordRow(w) {
           row.replaceWith(wordRow(w));
         },
       }, open ? '▾' : '▸') : null),
-    speakBtn(w.it),
+    speakBtn(itSpoken(w)),
     h('button', { class: 'icon-btn', title: 'Edit', onclick: () => openEditor(w) }, '✏️'),
     open ? h('div', { class: 'conj-list' },
       ...PRON.filter(p => conjOf(w)[p]).flatMap(p => [h('span', { class: 'hl' }, PRON_LABEL[p]), h('span', null, conjOf(w)[p])])) : null);
@@ -556,10 +558,10 @@ function flashCard(root, item, next) {
   const w = item.w;
   const inner = h('div', { class: 'flip-inner' },
     h('div', { class: 'face front' },
-      h('div', { class: 'big' }, item.k === 'ru-it' ? w.ru : itShown(w), item.k === 'it-ru' ? speakBtn(w.it) : null),
+      h('div', { class: 'big' }, item.k === 'ru-it' ? w.ru : itShown(w), item.k === 'it-ru' ? speakBtn(itSpoken(w)) : null),
       h('div', { class: 'sub' }, typeLabel(w))),
     h('div', { class: 'face back' },
-      h('div', { class: 'big' }, item.k === 'ru-it' ? itShown(w) : w.ru, item.k === 'ru-it' ? speakBtn(w.it) : null),
+      h('div', { class: 'big' }, item.k === 'ru-it' ? itShown(w) : w.ru, item.k === 'ru-it' ? speakBtn(itSpoken(w)) : null),
       extras(w)));
   const flip = h('div', { class: 'flip' }, inner);
   const grading = h('div', { class: 'row center', hidden: true },
@@ -572,7 +574,7 @@ function flashCard(root, item, next) {
         inner.classList.add('flipped');
         e.target.parentElement.hidden = true;
         grading.hidden = false;
-        if (item.k === 'ru-it') speak(w.it);
+        if (item.k === 'ru-it') speak(itSpoken(w));
       },
     }, 'Show answer'));
   root.append(flip, reveal, grading);
@@ -609,7 +611,7 @@ function typeCard(root, item, next) {
   const input = answerInput(item.k === 'ru-it' ? 'Italian' : 'Russian');
   const fb = h('div', { class: 'fb' });
   formCard(root, next, [
-    h('div', { class: 'big' }, prompt(item), item.k === 'it-ru' ? speakBtn(w.it) : null),
+    h('div', { class: 'big' }, prompt(item), item.k === 'it-ru' ? speakBtn(itSpoken(w)) : null),
     input, fb,
   ], () => {
     const text = input.value;
@@ -618,7 +620,7 @@ function typeCard(root, item, next) {
       : ruList(w).concat(w.ru).some(x => normRu(x) === normRu(text));
     input.disabled = true;
     showFeedback(fb, ok, answer(item));
-    if (item.k === 'ru-it') speak(w.it);
+    if (item.k === 'ru-it') speak(itSpoken(w));
     finish(item, { [item.k]: ok });
   }, input);
 }
