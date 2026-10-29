@@ -753,8 +753,13 @@ function importCSV(text) {
   const get = (r, n) => (col[n] >= 0 ? (r[col[n]] || '').trim() : '');
 
   let added = 0, existing = 0, skipped = 0, autofilled = 0;
-  const irregular = [];
-  const known = new Set(words.map(wordKey));
+  const irregular = [], notAdded = [];
+  // An imported row is a word you already have when Italian and article match and at least one translation is shared
+  // (la pesca — персик and la pesca — рыбалка stay separate words). Existing words are never changed.
+  const itKey = w => [w.it, w.defArticle].map(s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim()).join('|');
+  const byIt = new Map();
+  const remember = w => { const k = itKey(w); if (!byIt.has(k)) byIt.set(k, []); byIt.get(k).push(w); };
+  words.forEach(remember);
   // Each imported word gets a date one millisecond after the previous one, so the date sort keeps the file's order.
   let stamp = Math.max(words.reduce((m, w) => Math.max(m, w.createdAt || 0), 0) + 1, Date.now());
   for (const r of rows.slice(1)) {
@@ -779,9 +784,22 @@ function importCSV(text) {
       conj: Object.keys(forms).length ? { presente: forms } : undefined,
       updatedAt: Date.now(),
     };
-    if (known.has(wordKey(data))) { existing++; continue; } // already in the library (or repeated in the file): leave it alone
-    known.add(wordKey(data));
-    words.push({ id: crypto.randomUUID(), srs: {}, createdAt: stamp++, ...data });
+    const newRu = ruList(data);
+    const match = (byIt.get(itKey(data)) || []).find(w => {
+      const have = new Set(ruList(w).map(normRu));
+      return newRu.some(x => have.has(normRu(x)));
+    });
+    if (match) { // already in the library (or earlier in the file): leave it alone, but report translations it doesn't have
+      existing++;
+      const have = new Set(ruList(match).map(normRu));
+      const extra = newRu.filter(x => !have.has(normRu(x)));
+      const line = `${match.it} (${match.ru}): ${extra.join(', ')}`;
+      if (extra.length && !notAdded.includes(line)) notAdded.push(line);
+      continue;
+    }
+    const nw = { id: crypto.randomUUID(), srs: {}, createdAt: stamp++, ...data };
+    words.push(nw);
+    remember(nw);
     added++;
     if (filled) autofilled++;
     else if (pos === 'verb' && !data.conj && isIrregular(it)) irregular.push(it);
@@ -789,7 +807,8 @@ function importCSV(text) {
   saveWords();
   alert(`Import finished: ${added} added, ${existing} already in your library, ${skipped} skipped (no Italian or Russian).`
     + (autofilled ? `\n\n${autofilled} verb${autofilled === 1 ? '' : 's'} got regular forms filled in. Please check them in the Library.` : '')
-    + (irregular.length ? `\n\nIrregular verbs without forms (type them by hand): ${irregular.join(', ')}.` : ''));
+    + (irregular.length ? `\n\nIrregular verbs without forms (type them by hand): ${irregular.join(', ')}.` : '')
+    + (notAdded.length ? `\n\nNot added to existing words (add them by hand if you want):\n${notAdded.join('\n')}` : ''));
 }
 
 function exportCSV() {
