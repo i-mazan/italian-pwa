@@ -132,24 +132,53 @@ function normIt(s) {
 }
 const normRu = s => s.normalize('NFC').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
 
-// Regular present-tense forms for -are / -ere / -ire verbs (best-effort suggestion, user edits).
-function regularForms(inf) {
-  const m = inf.trim().toLowerCase().match(/^(.+)(are|ere|ire)$/);
-  if (!m) return null;
+// Verbs with an irregular present tense, plus endings that make compounds irregular too (ottenere, riuscire, raccogliere).
+const IRREGULAR_VERBS = new Set(['essere', 'avere', 'andare', 'fare', 'rifare', 'disfare', 'soddisfare', 'dare', 'stare',
+  'dire', 'contraddire', 'predire', 'potere', 'volere', 'dovere', 'sapere', 'bere', 'rimanere', 'tacere', 'giacere',
+  'morire', 'apparire', 'comparire', 'scomparire', 'parere', 'valere', 'spegnere', 'udire', 'cucire', 'dolere', 'nuocere']);
+const IRREGULAR_TAILS = ['venire', 'tenere', 'uscire', 'cogliere', 'togliere', 'scegliere', 'sciogliere', 'salire', 'sedere', 'piacere'];
+// Common -ire verbs that add -isc- (capisco); other -ire verbs follow dormire.
+const ISC_VERBS = new Set(['capire', 'finire', 'preferire', 'pulire', 'spedire', 'costruire', 'colpire', 'restituire',
+  'suggerire', 'unire', 'riunire', 'ubbidire', 'obbedire', 'sparire', 'tradire', 'impedire', 'gestire', 'fornire',
+  'guarire', 'ferire', 'garantire', 'definire', 'punire', 'reagire', 'agire', 'chiarire', 'stabilire', 'trasferire',
+  'inserire', 'distribuire', 'contribuire', 'attribuire', 'sostituire', 'diminuire', 'istruire', 'favorire',
+  'arricchire', 'dimagrire', 'ingrandire', 'impazzire', 'fiorire', 'approfondire', 'condire', 'digerire', 'esaurire',
+  'percepire', 'proibire', 'svanire', 'abolire', 'aderire', 'ammonire', 'arrossire', 'ingelosire',
+  'interferire', 'partorire', 'sbalordire', 'scolpire', 'smarrire', 'stupire', 'zittire']);
+// -iare verbs whose i is stressed keep it in the tu form (scii, invii).
+const STRESSED_I = new Set(['sciare', 'inviare', 'rinviare', 'avviare', 'spiare', 'deviare']);
+const REFL = ['mi', 'ti', 'si', 'ci', 'vi', 'si'];
+
+// lavarsi -> { base: 'lavare', refl: true }
+function verbParts(inf) {
+  const s = inf.trim().toLowerCase();
+  const m = s.match(/^(.+[aei]r)si$/);
+  return m ? { base: m[1] + 'e', refl: true } : { base: s, refl: false };
+}
+const isIrregular = inf => { const { base } = verbParts(inf); return IRREGULAR_VERBS.has(base) || IRREGULAR_TAILS.some(t => base.endsWith(t)); };
+const takesIsc = inf => ISC_VERBS.has(verbParts(inf).base);
+
+// Regular present-tense forms for -are / -ere / -ire verbs, reflexive ones too (best-effort suggestion, user edits).
+// Returns null for irregular verbs and for words that aren't an infinitive.
+function regularForms(inf, isc = takesIsc(inf)) {
+  const { base, refl } = verbParts(inf);
+  const m = base.match(/^(.+)(are|ere|ire)$/);
+  if (!m || isIrregular(inf)) return null;
   const [, stem, kind] = m;
-  const ends = {
+  const ends = kind === 'ire' && isc ? ['isco', 'isci', 'isce', 'iamo', 'ite', 'iscono'] : {
     are: ['o', 'i', 'a', 'iamo', 'ate', 'ano'],
     ere: ['o', 'i', 'e', 'iamo', 'ete', 'ono'],
     ire: ['o', 'i', 'e', 'iamo', 'ite', 'ono'],
   }[kind];
-  return ends.map((end, i) => {
+  const forms = ends.map((end, i) => {
     let st = stem;
     if (kind === 'are' && (i === 1 || i === 3)) {
       if (/[cg]$/.test(st)) st += 'h'; // cercare -> cerchi
-      else if (/[cg]i$/.test(st)) st = st.slice(0, -1); // mangiare -> mangi
+      else if (/i$/.test(st) && !(i === 1 && STRESSED_I.has(base))) st = st.slice(0, -1); // mangiare, studiare -> mangi, studi
     }
     return st + end;
   });
+  return refl ? forms.map((f, i) => REFL[i] + ' ' + f) : forms;
 }
 
 // ---------- spaced repetition ----------
@@ -356,6 +385,8 @@ function openEditor(existing) {
 
   f.pos = h('select', { onchange: syncVerb }, POS.map(p => h('option', { value: p, selected: w.pos === p }, p)));
   const conjInputs = {};
+  const iscBox = h('input', { type: 'checkbox', onchange: () => { iscTouched = true; } });
+  const iscRow = h('label', { class: 'row' }, iscBox, h('span', null, 'Adds -isc- (capisco, finisco)'));
   const conjBox = h('fieldset', null,
     h('legend', { class: 'muted' }, 'Present simple (presente)'),
     h('div', { class: 'conj-grid' },
@@ -363,16 +394,26 @@ function openEditor(existing) {
         conjInputs[p] = h('input', { value: conj[p] ?? '', autocapitalize: 'off' });
         return [h('label', null, PRON_LABEL[p]), conjInputs[p], h('span')];
       })),
+    iscRow,
     h('div', { class: 'row' },
       h('button', {
         class: 'btn secondary', type: 'button',
         onclick: () => {
-          const forms = regularForms(f.it.value);
-          if (!forms) return alert('Enter the infinitive first (ending in -are, -ere or -ire).');
+          const inf = f.it.value.trim();
+          if (inf && isIrregular(inf)) return alert(`"${inf}" is irregular. Please type its forms by hand.`);
+          const forms = regularForms(inf, iscBox.checked);
+          if (!forms) return alert('Enter the infinitive first (ending in -are, -ere, -ire, or -arsi, -ersi, -irsi).');
           PRON.forEach((p, i) => { conjInputs[p].value = forms[i]; });
         },
       }, 'Autofill regular'),
-      h('span', { class: 'muted' }, 'Check -isc verbs and irregulars by hand.')));
+      h('span', { class: 'muted' }, 'Check the forms before saving.')));
+  // Ticked automatically for known -isc- verbs until the user changes it by hand.
+  let iscTouched = false;
+  function syncIsc() {
+    const base = verbParts(f.it.value).base;
+    iscRow.hidden = !/ire$/.test(base);
+    if (!iscTouched) iscBox.checked = takesIsc(f.it.value) || /isco$/.test(conj.io || '');
+  }
 
   function syncVerb() {
     conjBox.hidden = f.pos.value !== 'verb';
@@ -436,6 +477,8 @@ function openEditor(existing) {
   dlg.append(form);
   dlg.addEventListener('close', () => dlg.remove());
   document.body.append(dlg);
+  f.it.addEventListener('input', syncIsc);
+  syncIsc();
   syncVerb();
   dlg.showModal();
 }
@@ -709,7 +752,8 @@ function importCSV(text) {
   if (col.italian < 0 || col.russian < 0) return alert('The header row must contain "italian" and "russian" columns.');
   const get = (r, n) => (col[n] >= 0 ? (r[col[n]] || '').trim() : '');
 
-  let added = 0, existing = 0, skipped = 0;
+  let added = 0, existing = 0, skipped = 0, autofilled = 0;
+  const irregular = [];
   const known = new Set(words.map(wordKey));
   // Each imported word gets a date one millisecond after the previous one, so the date sort keeps the file's order.
   let stamp = Math.max(words.reduce((m, w) => Math.max(m, w.createdAt || 0), 0) + 1, Date.now());
@@ -721,6 +765,12 @@ function importCSV(text) {
     let pos = get(r, 'pos').toLowerCase();
     if (oldNoun(pos)) pos = 'noun'; // older files use noun-m / noun-f
     if (!POS.includes(pos)) pos = Object.keys(forms).length ? 'verb' : 'other';
+    // A verb row without forms gets the regular ones; irregular verbs stay empty and are listed at the end.
+    let filled = false;
+    if (pos === 'verb' && !Object.keys(forms).length) {
+      const reg = regularForms(it);
+      if (reg) { PRON.forEach((p, i) => { forms[p] = reg[i]; }); filled = true; }
+    }
     const data = {
       it, ru, pos,
       defArticle: get(r, 'defArticle').toLowerCase(),
@@ -733,9 +783,13 @@ function importCSV(text) {
     known.add(wordKey(data));
     words.push({ id: crypto.randomUUID(), srs: {}, createdAt: stamp++, ...data });
     added++;
+    if (filled) autofilled++;
+    else if (pos === 'verb' && !data.conj && isIrregular(it)) irregular.push(it);
   }
   saveWords();
-  alert(`Import finished: ${added} added, ${existing} already in your library, ${skipped} skipped (no Italian or Russian).`);
+  alert(`Import finished: ${added} added, ${existing} already in your library, ${skipped} skipped (no Italian or Russian).`
+    + (autofilled ? `\n\n${autofilled} verb${autofilled === 1 ? '' : 's'} got regular forms filled in. Please check them in the Library.` : '')
+    + (irregular.length ? `\n\nIrregular verbs without forms (type them by hand): ${irregular.join(', ')}.` : ''));
 }
 
 function exportCSV() {
