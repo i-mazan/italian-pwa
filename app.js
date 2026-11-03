@@ -330,10 +330,24 @@ function renderLibrary() {
     );
   };
 
+  // Custom clear (×) button: iOS Safari / Firefox don't draw the native one on type="search".
+  const search = h('input', {
+    type: 'search', placeholder: 'Search…', value: lib.q,
+    oninput: e => { lib.q = e.target.value; clearBtn.hidden = !lib.q; refresh(); },
+  });
+  const clearBtn = h('button', {
+    type: 'button', class: 'search-clear', 'aria-label': 'Clear search', hidden: !lib.q,
+    // keep focus (and the mobile keyboard) on the field when tapping ×
+    onpointerdown: e => e.preventDefault(),
+    onclick: () => { search.value = lib.q = ''; clearBtn.hidden = true; search.focus(); refresh(); },
+  });
+  // a drawn X instead of the "×" character, which fonts place off-centre
+  clearBtn.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10"/><path d="M6.5 6.5l7 7M13.5 6.5l-7 7"/></svg>';
+
   root.append(
     h('div', { class: 'lib-top' },
       h('div', { class: 'row' },
-        h('input', { type: 'search', placeholder: 'Search…', value: lib.q, oninput: e => { lib.q = e.target.value; refresh(); } }),
+        h('div', { class: 'search-wrap' }, search, clearBtn),
         sortBtn,
         h('button', { class: 'btn add-btn', onclick: () => openEditor() }, '+ Add')
       ),
@@ -370,7 +384,11 @@ function wordRow(w) {
     speakBtn(itSpoken(w)),
     h('button', { class: 'icon-btn', title: 'Edit', onclick: () => openEditor(w) }, '✏️'),
     open ? h('div', { class: 'conj-list' },
-      ...PRON.filter(p => conjOf(w)[p]).flatMap(p => [h('span', { class: 'hl' }, PRON_LABEL[p]), h('span', null, conjOf(w)[p])])) : null);
+      ...PRON.filter(p => conjOf(w)[p]).flatMap(p => [
+        h('span', { class: 'hl' }, PRON_LABEL[p]),
+        h('span', null, conjOf(w)[p]),
+        speakBtn(conjOf(w)[p]),
+      ])) : null);
   return row;
 }
 
@@ -720,10 +738,10 @@ function tableCard(root, item, next) {
 }
 
 // ---------- CSV ----------
-function parseCSV(text) {
+function parseCSV(text, delim) {
   text = text.replace(/^﻿/, '');
   const first = text.split(/\r?\n/, 1)[0];
-  const delim = first.split(';').length >= first.split(',').length ? ';' : ',';
+  delim = delim || (first.split(';').length >= first.split(',').length ? ';' : ',');
   const rows = [];
   let row = [], cell = '', quoted = false;
   for (let i = 0; i < text.length; i++) {
@@ -741,7 +759,11 @@ function parseCSV(text) {
     } else cell += ch;
   }
   if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
-  return rows.filter(r => r.some(c => c.trim() !== ''));
+  // A whole line typed into one Excel cell is saved quoted when it contains a comma
+  // (";;la mattina;утром, по утрам;other;" in quotes), so it reads as one column. Split it again.
+  return rows
+    .map(r => (r.length === 1 && r[0].includes(delim) ? parseCSV(r[0], delim)[0] || r : r))
+    .filter(r => r.some(c => c.trim() !== ''));
 }
 
 function importCSV(text) {
