@@ -9,7 +9,6 @@ const PRON_LABEL = { io: 'io', tu: 'tu', lui: 'lui/lei', noi: 'noi', voi: 'voi',
 const DAY = 864e5;
 const INTERVALS = [1, 2, 4, 8, 16]; // days per Leitner box 1..5
 const SESSION_SIZE = 10;
-const NEW_RESERVED = 3;
 const CSV_COLUMNS = ['defArticle', 'indefArticle', 'italian', 'russian', 'pos', 'example', ...PRON];
 
 function loadJSON(key, fallback) {
@@ -212,20 +211,41 @@ function itemsFor(mode, dir) {
   return words.flatMap(w => dirs.map(k => ({ w, k })));
 }
 
-function buildQueue(items, mode) {
+// When a word was last answered: grade() sets due = answer time + box interval.
+function lastSeen(item) {
+  return Math.min(...keysOf(item).map(k => {
+    const e = srsGet(item.w, k);
+    return e ? e.due - INTERVALS[e.box - 1] * DAY : 0;
+  }));
+}
+
+function buildQueue(items, mode, max = SESSION_SIZE) {
+  // Flashcards / typing: a word shows up at most once per session, even in Mixed direction.
+  const oneWord = mode === 'flash' || mode === 'type';
+  const taken = new Set();
+  const take = (list, n) => {
+    const out = [];
+    for (const i of list) {
+      if (out.length >= n) break;
+      const key = oneWord ? i.w.id : i;
+      if (taken.has(key)) continue;
+      taken.add(key);
+      out.push(i);
+    }
+    return out;
+  };
   const due = shuffle(items.filter(i => status(i) === 'due'));
   const newAll = shuffle(items.filter(i => status(i) === 'new'));
-  const max = SESSION_SIZE;
-  // Same size in every mode and direction. Up to NEW_RESERVED slots are kept for new words so a
-  // backlog of due words can't push them out; leftover slots go to whichever group has more.
-  const reserved = newAll.slice(0, NEW_RESERVED);
-  const dueTaken = due.slice(0, max - reserved.length);
-  const extraNew = newAll.slice(reserved.length, reserved.length + max - reserved.length - dueTaken.length);
+  // Half the session is kept for new words so a backlog of due words can't push them out;
+  // leftover slots go to whichever group has more.
+  const reserved = take(newAll, Math.ceil(max / 2));
+  const dueTaken = take(due, max - reserved.length);
+  const extraNew = take(newAll, max - reserved.length - dueTaken.length);
   const queue = shuffle(dueTaken.concat(reserved, extraNew));
   if (queue.length || !items.length) return queue;
-  // Nothing due or new: extra practice, weakest cards (lowest box) first.
-  const box = i => Math.min(...keysOf(i).map(k => srsGet(i.w, k)?.box ?? 1));
-  return shuffle(items).sort((a, b) => box(a) - box(b)).slice(0, max).map(i => ({ ...i, extra: true }));
+  // Nothing due or new: extra practice, words not seen for the longest time first.
+  const sorted = shuffle(items).sort((a, b) => lastSeen(a) - lastSeen(b));
+  return take(sorted, max).map(i => ({ ...i, extra: true }));
 }
 
 // ---------- theme ----------
@@ -502,7 +522,8 @@ function openEditor(existing) {
 }
 
 // ---------- training ----------
-const trainPrefs = { mode: 'flash', dir: 'mixed' };
+const TABLE_COUNTS = [3, 5, 10, 15];
+const trainPrefs = { mode: 'flash', dir: 'mixed', count: 10 };
 let session = null;
 
 const MODES = [
@@ -523,24 +544,35 @@ function renderTrain() {
   root.replaceChildren();
   if (session) return renderCard();
 
-  const dirSel = h('select', { onchange: e => { trainPrefs.dir = e.target.value; } },
-    [['mixed', 'Mixed'], ['ru-it', 'Russian → Italian'], ['it-ru', 'Italian → Russian']]
-      .map(([v, t]) => h('option', { value: v, selected: trainPrefs.dir === v }, t)));
-  const syncDir = () => { dirSel.disabled = trainPrefs.mode === 'conj' || trainPrefs.mode === 'table'; };
+  const dirBox = h('div', null,
+    h('label', { class: 'muted' }, 'Direction'),
+    h('select', { onchange: e => { trainPrefs.dir = e.target.value; } },
+      [['mixed', 'Mixed'], ['ru-it', 'Russian → Italian'], ['it-ru', 'Italian → Russian']]
+        .map(([v, t]) => h('option', { value: v, selected: trainPrefs.dir === v }, t))));
+  const countBox = h('div', null,
+    h('label', { class: 'muted' }, 'Number of verbs'),
+    h('select', { onchange: e => { trainPrefs.count = Number(e.target.value); } },
+      TABLE_COUNTS.map(n => h('option', { value: n, selected: trainPrefs.count === n }, `${n} verbs`))));
+  // Direction only applies to word modes; the verb count only to the full table.
+  const syncOpts = () => {
+    dirBox.hidden = trainPrefs.mode === 'conj' || trainPrefs.mode === 'table';
+    countBox.hidden = trainPrefs.mode !== 'table';
+  };
 
   root.append(
     h('h2', null, 'Practice'),
     h('label', { class: 'muted' }, 'Mode'),
-    h('select', { onchange: e => { trainPrefs.mode = e.target.value; syncDir(); } },
+    h('select', { onchange: e => { trainPrefs.mode = e.target.value; syncOpts(); } },
       MODES.map(([v, t]) => h('option', { value: v, selected: trainPrefs.mode === v }, t))),
-    h('label', { class: 'muted' }, 'Direction'),
-    dirSel,
+    dirBox,
+    countBox,
     h('div', { class: 'row' }, h('button', { class: 'btn', onclick: startSession }, 'Start')));
-  syncDir();
+  syncOpts();
 }
 
 function startSession() {
-  const queue = buildQueue(modeItems(trainPrefs.mode, trainPrefs.dir), trainPrefs.mode);
+  const size = trainPrefs.mode === 'table' ? trainPrefs.count : SESSION_SIZE;
+  const queue = buildQueue(modeItems(trainPrefs.mode, trainPrefs.dir), trainPrefs.mode, size);
   if (!queue.length) {
     const needsVerbs = trainPrefs.mode === 'conj' || trainPrefs.mode === 'table';
     return alert(words.length
@@ -567,7 +599,8 @@ function finish(item, results) {
     logAnswer(ok);
     session.total++;
     if (ok) session.correct++;
-    if (!ok) session.queue.push({ ...item, isRetry: true });
+    // Wrong answers come back at the end of the session, except in the verb conjugation modes.
+    if (!ok && session.mode !== 'conj' && session.mode !== 'table') session.queue.push({ ...item, isRetry: true });
   }
   session.idx++;
 }
