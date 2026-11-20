@@ -533,10 +533,19 @@ const MODES = [
   ['table', 'Verb conjugation: full table'],
 ];
 
+// Word-type chips for Flashcards / Type the answer: the Library groups minus "All".
+// settings.practiceOff lists the groups switched off, so every type starts on.
+const PRACTICE_GROUPS = LIB_GROUPS.slice(1);
+const isWordMode = mode => mode === 'flash' || mode === 'type';
 // Phrases can't be typed reliably, so they only appear in flashcards.
+const practiceGroups = mode => PRACTICE_GROUPS.filter(g => mode !== 'type' || g[0] !== 'phrase');
+const practiceOn = mode => practiceGroups(mode).filter(g => !(settings.practiceOff || []).includes(g[0]));
+
 function modeItems(mode, dir) {
-  const items = itemsFor(mode === 'flash' || mode === 'type' ? 'words' : mode, dir);
-  return mode === 'type' ? items.filter(i => i.w.pos !== 'phrase') : items;
+  const items = itemsFor(isWordMode(mode) ? 'words' : mode, dir);
+  if (!isWordMode(mode)) return items;
+  const tests = practiceOn(mode).map(g => g[2]);
+  return items.filter(i => tests.some(t => t(i.w)));
 }
 
 function renderTrain() {
@@ -553,10 +562,25 @@ function renderTrain() {
     h('label', { class: 'muted' }, 'Number of verbs'),
     h('select', { onchange: e => { trainPrefs.count = Number(e.target.value); } },
       TABLE_COUNTS.map(n => h('option', { value: n, selected: trainPrefs.count === n }, `${n} verbs`))));
-  // Direction only applies to word modes; the verb count only to the full table.
+  const chips = h('div', { class: 'chips' });
+  const typeBox = h('div', null, h('label', { class: 'muted' }, 'Word types'), chips);
+  const drawChips = () => {
+    const off = settings.practiceOff || [];
+    chips.replaceChildren(...practiceGroups(trainPrefs.mode).map(([key, label, test]) =>
+      h('button', {
+        class: 'chip' + (off.includes(key) ? '' : ' active'),
+        onclick: () => {
+          settings.practiceOff = off.includes(key) ? off.filter(k => k !== key) : [...off, key];
+          saveSettings();
+          drawChips();
+        },
+      }, `${label} (${words.filter(test).length})`)));
+  };
+  // Direction and word types only apply to word modes; the verb count only to the full table.
   const syncOpts = () => {
-    dirBox.hidden = trainPrefs.mode === 'conj' || trainPrefs.mode === 'table';
+    dirBox.hidden = typeBox.hidden = !isWordMode(trainPrefs.mode);
     countBox.hidden = trainPrefs.mode !== 'table';
+    drawChips();
   };
 
   root.append(
@@ -565,19 +589,22 @@ function renderTrain() {
     h('select', { onchange: e => { trainPrefs.mode = e.target.value; syncOpts(); } },
       MODES.map(([v, t]) => h('option', { value: v, selected: trainPrefs.mode === v }, t))),
     dirBox,
+    typeBox,
     countBox,
     h('div', { class: 'row' }, h('button', { class: 'btn', onclick: startSession }, 'Start')));
   syncOpts();
 }
 
 function startSession() {
+  const wordMode = isWordMode(trainPrefs.mode);
+  if (wordMode && !practiceOn(trainPrefs.mode).length) return alert('Pick at least one word type.');
   const size = trainPrefs.mode === 'table' ? trainPrefs.count : SESSION_SIZE;
   const queue = buildQueue(modeItems(trainPrefs.mode, trainPrefs.dir), trainPrefs.mode, size);
   if (!queue.length) {
     const needsVerbs = trainPrefs.mode === 'conj' || trainPrefs.mode === 'table';
     return alert(words.length
       ? needsVerbs ? 'No verbs with conjugation forms yet. Add a verb and fill in its forms.'
-        : trainPrefs.mode === 'type' ? 'No words to type yet. Phrases are practised with flashcards.' : 'Nothing to practise yet.'
+        : wordMode ? 'No words of the chosen types yet. Turn on more word types or add words.' : 'Nothing to practise yet.'
       : 'Add some words first.');
   }
   session = { mode: trainPrefs.mode, queue, idx: 0, correct: 0, total: 0 };
